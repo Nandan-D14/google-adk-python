@@ -117,7 +117,7 @@ class ConformanceTestRunner:
       self, session_id: str, test_case: TestCase
   ) -> None:
     """Run all user messages for a test case."""
-    function_call_name_to_id_map = {}
+    function_call_name_to_id_map: dict[str, str] = {}
     for user_message_index, user_message in enumerate(
         test_case.test_spec.user_messages
     ):

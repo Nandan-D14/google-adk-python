@@ -636,7 +636,7 @@ def to_cloud_run(
     otel_to_cloud: bool,
     with_ui: bool,
     log_level: str,
-    verbosity: str,
+    verbosity: Optional[str],
     adk_version: str,
     allow_origins: Optional[list[str]] = None,
     session_service_uri: Optional[str] = None,

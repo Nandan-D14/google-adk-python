@@ -25,7 +25,12 @@ import os
 from pathlib import Path
 import tempfile
 import textwrap
+from typing import Any
+from typing import AsyncIterator
+from typing import Callable
 from typing import Optional
+from typing import TypeVar
+from typing import cast
 
 import click
 from click.core import ParameterSource
@@ -48,6 +53,8 @@ LOG_LEVELS = click.Choice(
     ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     case_sensitive=False,
 )
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 def _apply_feature_overrides(
@@ -90,11 +97,11 @@ def _apply_feature_overrides(
       )
 
 
-def feature_options():
+def feature_options() -> Callable[[F], F]:
   """Decorator to add feature override options to click commands."""
 
-  def decorator(func):
-    @click.option(
+  def decorator(func: F) -> F:
+    @click.option(  # type: ignore[untyped-decorator]
         "--enable_features",
         help=(
             "Optional. Comma-separated list of feature names to enable. "
@@ -104,7 +111,7 @@ def feature_options():
         ),
         multiple=True,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--disable_features",
         help=(
             "Optional. Comma-separated list of feature names to disable. "
@@ -115,7 +122,7 @@ def feature_options():
         multiple=True,
     )
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
       enable_features = kwargs.pop("enable_features", ())
       disable_features = kwargs.pop("disable_features", ())
       if enable_features or disable_features:
@@ -125,12 +132,12 @@ def feature_options():
         )
       return func(*args, **kwargs)
 
-    return wrapper
+    return cast(F, wrapper)
 
   return decorator
 
 
-class HelpfulCommand(click.Command):
+class HelpfulCommand(click.Command):  # type: ignore[misc]
   """Command that shows full help on error instead of just the error message.
 
   A custom Click Command class that overrides the default error handling
@@ -148,11 +155,11 @@ class HelpfulCommand(click.Command):
   Returns:
   """
 
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args: Any, **kwargs: Any) -> None:
     super().__init__(*args, **kwargs)
 
   @staticmethod
-  def _format_missing_arg_error(click_exception):
+  def _format_missing_arg_error(click_exception: click.MissingParameter) -> str:
     """Format the missing argument error with uppercase parameter name.
 
     Args:
@@ -162,9 +169,11 @@ class HelpfulCommand(click.Command):
       str: Formatted error message with uppercase parameter name.
     """
     name = click_exception.param.name
-    return f"Missing required argument: {name.upper()}"
+    if name:
+      return f"Missing required argument: {name.upper()}"
+    return "Missing required argument."
 
-  def parse_args(self, ctx, args):
+  def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
     """Override the parse_args method to show help text on error.
 
     Args:
@@ -179,13 +188,14 @@ class HelpfulCommand(click.Command):
         is caught and handled by displaying the help text before exiting.
     """
     try:
-      return super().parse_args(ctx, args)
+      return cast(list[str], super().parse_args(ctx, args))
     except click.MissingParameter as exc:
       error_message = self._format_missing_arg_error(exc)
 
       click.echo(ctx.get_help())
       click.secho(f"\nError: {error_message}", fg="red", err=True)
       ctx.exit(2)
+      return []
 
 
 logger = logging.getLogger("google_adk." + __name__)
@@ -203,38 +213,38 @@ def _warn_if_with_ui(with_ui: bool) -> None:
     click.secho(f"WARNING: {_ADK_WEB_WARNING}", fg="yellow", err=True)
 
 
-@click.group(context_settings={"max_content_width": 240})
-@click.version_option(version.__version__)
-def main():
+@click.group(context_settings={"max_content_width": 240})  # type: ignore[untyped-decorator]
+@click.version_option(version.__version__)  # type: ignore[untyped-decorator]
+def main() -> None:
   """Agent Development Kit CLI tools."""
   pass
 
 
-@main.group()
-def deploy():
+@main.group()  # type: ignore[untyped-decorator]
+def deploy() -> None:
   """Deploys agent to hosted environments."""
   pass
 
 
-@main.group()
-def conformance():
+@main.group()  # type: ignore[untyped-decorator]
+def conformance() -> None:
   """Conformance testing tools for ADK."""
   pass
 
 
-@conformance.command("record", cls=HelpfulCommand)
-@click.argument(
+@conformance.command("record", cls=HelpfulCommand)  # type: ignore[untyped-decorator]
+@click.argument(  # type: ignore[untyped-decorator]
     "paths",
     nargs=-1,
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
     ),
 )
-@click.pass_context
+@click.pass_context  # type: ignore[untyped-decorator]
 def cli_conformance_record(
-    ctx,
+    ctx: click.Context,
     paths: tuple[str, ...],
-):
+) -> None:
   """Generate ADK conformance test YAML files from TestCaseInput specifications.
 
   NOTE: this is work in progress.
@@ -276,15 +286,15 @@ def cli_conformance_record(
   asyncio.run(run_conformance_record(test_paths))
 
 
-@conformance.command("test", cls=HelpfulCommand)
-@click.argument(
+@conformance.command("test", cls=HelpfulCommand)  # type: ignore[untyped-decorator]
+@click.argument(  # type: ignore[untyped-decorator]
     "paths",
     nargs=-1,
     type=click.Path(
         exists=True, file_okay=False, dir_okay=True, resolve_path=True
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--mode",
     type=click.Choice(["replay", "live"], case_sensitive=False),
     default="replay",
@@ -294,12 +304,12 @@ def cli_conformance_record(
         " runs evaluation-based verification."
     ),
 )
-@click.pass_context
+@click.pass_context  # type: ignore[untyped-decorator]
 def cli_conformance_test(
-    ctx,
+    ctx: click.Context,
     paths: tuple[str, ...],
     mode: str,
-):
+) -> None:
   """Run conformance tests to verify agent behavior consistency.
 
   Validates that agents produce consistent outputs by comparing against recorded
@@ -369,13 +379,13 @@ def cli_conformance_test(
   asyncio.run(run_conformance_test(test_paths=test_paths, mode=mode.lower()))
 
 
-@main.command("create", cls=HelpfulCommand)
-@click.option(
+@main.command("create", cls=HelpfulCommand)  # type: ignore[untyped-decorator]
+@click.option(  # type: ignore[untyped-decorator]
     "--model",
     type=str,
     help="Optional. The model used for the root agent.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--api_key",
     type=str,
     help=(
@@ -383,17 +393,17 @@ def cli_conformance_test(
         " Key."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--project",
     type=str,
     help="Optional. The Google Cloud Project for using VertexAI as backend.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--region",
     type=str,
     help="Optional. The Google Cloud Region for using VertexAI as backend.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--type",
     type=click.Choice(["CODE", "CONFIG"], case_sensitive=False),
     help=(
@@ -405,7 +415,7 @@ def cli_conformance_test(
     show_default=True,
     hidden=True,  # Won't show in --help output. Not ready for use.
 )
-@click.argument("app_name", type=str, required=True)
+@click.argument("app_name", type=str, required=True)  # type: ignore[untyped-decorator]
 def cli_create_cmd(
     app_name: str,
     model: Optional[str],
@@ -413,7 +423,7 @@ def cli_create_cmd(
     project: Optional[str],
     region: Optional[str],
     type: Optional[str],
-):
+) -> None:
   """Creates a new app in the current folder with prepopulated agent template.
 
   APP_NAME: required, the folder of the agent source code.
@@ -432,7 +442,9 @@ def cli_create_cmd(
   )
 
 
-def validate_exclusive(ctx, param, value):
+def validate_exclusive(
+    ctx: click.Context, param: click.Parameter, value: Any
+) -> Any:
   # Store the validated parameters in the context
   if not hasattr(ctx, "exclusive_opts"):
     ctx.exclusive_opts = {}
@@ -445,15 +457,17 @@ def validate_exclusive(ctx, param, value):
     )
 
   # Record this option's value
-  ctx.exclusive_opts[param.name] = value is not None
+  ctx.exclusive_opts[str(param.name)] = value is not None
   return value
 
 
-def adk_services_options(*, default_use_local_storage: bool = True):
+def adk_services_options(
+    *, default_use_local_storage: bool = True
+) -> Callable[[F], F]:
   """Decorator to add ADK services options to click commands."""
 
-  def decorator(func):
-    @click.option(
+  def decorator(func: F) -> F:
+    @click.option(  # type: ignore[untyped-decorator]
         "--session_service_uri",
         help=textwrap.dedent("""\
             Optional. The URI of the session service.
@@ -470,7 +484,7 @@ def adk_services_options(*, default_use_local_storage: bool = True):
             - See https://docs.sqlalchemy.org/en/20/core/engines.html#backend-specific-urls
               for supported database URIs."""),
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--artifact_service_uri",
         type=str,
         help=textwrap.dedent(
@@ -486,7 +500,7 @@ def adk_services_options(*, default_use_local_storage: bool = True):
         ),
         default=None,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--use_local_storage/--no_use_local_storage",
         default=default_use_local_storage,
         show_default=True,
@@ -499,7 +513,7 @@ def adk_services_options(*, default_use_local_storage: bool = True):
             "ADK_FORCE_LOCAL_STORAGE=1 or ADK_DISABLE_LOCAL_STORAGE=1."
         ),
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--memory_service_uri",
         type=str,
         help=textwrap.dedent("""\
@@ -513,7 +527,7 @@ def adk_services_options(*, default_use_local_storage: bool = True):
         default=None,
     )
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
       ctx = click.get_current_context(silent=True)
       if ctx is not None:
         use_local_storage_source = ctx.get_parameter_source("use_local_storage")
@@ -527,15 +541,15 @@ def adk_services_options(*, default_use_local_storage: bool = True):
           )
       return func(*args, **kwargs)
 
-    return wrapper
+    return cast(F, wrapper)
 
   return decorator
 
 
-@main.command("run", cls=HelpfulCommand)
+@main.command("run", cls=HelpfulCommand)  # type: ignore[untyped-decorator]
 @feature_options()
 @adk_services_options(default_use_local_storage=True)
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--save_session",
     type=bool,
     is_flag=True,
@@ -543,7 +557,7 @@ def adk_services_options(*, default_use_local_storage: bool = True):
     default=False,
     help="Optional. Whether to save the session to a json file on exit.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--session_id",
     type=str,
     help=(
@@ -552,7 +566,7 @@ def adk_services_options(*, default_use_local_storage: bool = True):
         " session ID if not set."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--replay",
     type=click.Path(
         exists=True, dir_okay=False, file_okay=True, resolve_path=True
@@ -565,19 +579,19 @@ def adk_services_options(*, default_use_local_storage: bool = True):
     ),
     callback=validate_exclusive,
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--resume",
     type=click.Path(
         exists=True, dir_okay=False, file_okay=True, resolve_path=True
     ),
     help=(
-        "The json file that contains a previously saved session (by"
+        "The json file that contains the previously saved session (by"
         " --save_session option). The previous session will be re-displayed."
         " And user can continue to interact with the agent."
     ),
     callback=validate_exclusive,
 )
-@click.argument(
+@click.argument(  # type: ignore[untyped-decorator]
     "agent",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
@@ -593,7 +607,7 @@ def cli_run(
     artifact_service_uri: Optional[str] = None,
     memory_service_uri: Optional[str] = None,
     use_local_storage: bool = True,
-):
+) -> None:
   """Runs an interactive CLI for a certain agent.
 
   AGENT: The path to the agent source code folder.
@@ -630,11 +644,11 @@ def cli_run(
   )
 
 
-def eval_options():
+def eval_options() -> Callable[[F], F]:
   """Decorator to add common eval options to click commands."""
 
-  def decorator(func):
-    @click.option(
+  def decorator(func: F) -> F:
+    @click.option(  # type: ignore[untyped-decorator]
         "--eval_storage_uri",
         type=str,
         help=(
@@ -643,32 +657,32 @@ def eval_options():
         ),
         default=None,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--log_level",
         type=LOG_LEVELS,
         default="INFO",
         help="Optional. Set the logging level",
     )
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
       return func(*args, **kwargs)
 
-    return wrapper
+    return cast(F, wrapper)
 
   return decorator
 
 
-@main.command("eval", cls=HelpfulCommand)
+@main.command("eval", cls=HelpfulCommand)  # type: ignore[untyped-decorator]
 @feature_options()
-@click.argument(
+@click.argument(  # type: ignore[untyped-decorator]
     "agent_module_file_path",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
     ),
 )
-@click.argument("eval_set_file_path_or_id", nargs=-1)
-@click.option("--config_file_path", help="Optional. The path to config file.")
-@click.option(
+@click.argument("eval_set_file_path_or_id", nargs=-1)  # type: ignore[untyped-decorator]
+@click.option("--config_file_path", help="Optional. The path to config file.")  # type: ignore[untyped-decorator]
+@click.option(  # type: ignore[untyped-decorator]
     "--print_detailed_results",
     is_flag=True,
     show_default=True,
@@ -683,7 +697,7 @@ def cli_eval(
     print_detailed_results: bool,
     eval_storage_uri: Optional[str] = None,
     log_level: str = "INFO",
-):
+) -> None:
   """Evaluates an agent given the eval sets.
 
   AGENT_MODULE_FILE_PATH: The path to the __init__.py file that contains a
@@ -900,8 +914,6 @@ def cli_eval(
   eval_run_summary = {}
 
   for eval_result in eval_results:
-    eval_result: EvalCaseResult
-
     if eval_result.eval_set_id not in eval_run_summary:
       eval_run_summary[eval_result.eval_set_id] = [0, 0]
 
@@ -918,34 +930,33 @@ def cli_eval(
 
   if print_detailed_results:
     for eval_result in eval_results:
-      eval_result: EvalCaseResult
       click.echo(
           "********************************************************************"
       )
       pretty_print_eval_result(eval_result)
 
 
-@main.group("eval_set")
-def eval_set():
+@main.group("eval_set")  # type: ignore[untyped-decorator]
+def eval_set() -> None:
   """Manage Eval Sets."""
   pass
 
 
-@eval_set.command("create", cls=HelpfulCommand)
-@click.argument(
+@eval_set.command("create", cls=HelpfulCommand)  # type: ignore[untyped-decorator]
+@click.argument(  # type: ignore[untyped-decorator]
     "agent_module_file_path",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
     ),
 )
-@click.argument("eval_set_id", type=str, required=True)
+@click.argument("eval_set_id", type=str, required=True)  # type: ignore[untyped-decorator]
 @eval_options()
 def cli_create_eval_set(
     agent_module_file_path: str,
     eval_set_id: str,
     eval_storage_uri: Optional[str] = None,
     log_level: str = "INFO",
-):
+) -> None:
   """Creates an empty EvalSet given the agent_module_file_path and eval_set_id."""
   from .cli_eval import get_eval_sets_manager
 
@@ -963,15 +974,15 @@ def cli_create_eval_set(
     raise click.ClickException(str(e))
 
 
-@eval_set.command("add_eval_case", cls=HelpfulCommand)
-@click.argument(
+@eval_set.command("add_eval_case", cls=HelpfulCommand)  # type: ignore[untyped-decorator]
+@click.argument(  # type: ignore[untyped-decorator]
     "agent_module_file_path",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
     ),
 )
-@click.argument("eval_set_id", type=str, required=True)
-@click.option(
+@click.argument("eval_set_id", type=str, required=True)  # type: ignore[untyped-decorator]
+@click.option(  # type: ignore[untyped-decorator]
     "--scenarios_file",
     type=click.Path(
         exists=True, dir_okay=False, file_okay=True, resolve_path=True
@@ -979,7 +990,7 @@ def cli_create_eval_set(
     help="A path to file containing JSON serialized ConversationScenarios.",
     required=True,
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--session_input_file",
     type=click.Path(
         exists=True, dir_okay=False, file_okay=True, resolve_path=True
@@ -993,9 +1004,9 @@ def cli_add_eval_case(
     eval_set_id: str,
     scenarios_file: str,
     eval_storage_uri: Optional[str] = None,
-    session_input_file: Optional[str] = None,
+    session_input_file: str = "",  # Default to empty, click validates required
     log_level: str = "INFO",
-):
+) -> None:
   """Adds eval cases to the given eval set.
 
   There are several ways that an eval case can be created, for now this method
@@ -1057,17 +1068,17 @@ def cli_add_eval_case(
     raise click.ClickException(f"Failed to add eval case(s): {e}") from e
 
 
-def web_options():
+def web_options() -> Callable[[F], F]:
   """Decorator to add web UI options to click commands."""
 
-  def decorator(func):
-    @click.option(
+  def decorator(func: F) -> F:
+    @click.option(  # type: ignore[untyped-decorator]
         "--logo-text",
         type=str,
         help="Optional. The text to display in the logo of the web UI.",
         default=None,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--logo-image-url",
         type=str,
         help=(
@@ -1077,15 +1088,17 @@ def web_options():
         default=None,
     )
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
       return func(*args, **kwargs)
 
-    return wrapper
+    return cast(F, wrapper)
 
   return decorator
 
 
-def _deprecate_staging_bucket(ctx, param, value):
+def _deprecate_staging_bucket(
+    ctx: click.Context, param: click.Parameter, value: Any
+) -> Any:
   if value:
     click.echo(
         click.style(
@@ -1098,10 +1111,15 @@ def _deprecate_staging_bucket(ctx, param, value):
   return value
 
 
-def deprecated_adk_services_options():
+def deprecated_adk_services_options() -> Callable[[F], F]:
   """Deprecated ADK services options."""
 
-  def warn(alternative_param, ctx, param, value):
+  def warn(
+      alternative_param: str,
+      ctx: click.Context,
+      param: click.Parameter,
+      value: Any,
+  ) -> Any:
     if value:
       click.echo(
           click.style(
@@ -1113,13 +1131,13 @@ def deprecated_adk_services_options():
       )
     return value
 
-  def decorator(func):
-    @click.option(
+  def decorator(func: F) -> F:
+    @click.option(  # type: ignore[untyped-decorator]
         "--session_db_url",
         help="Deprecated. Use --session_service_uri instead.",
         callback=functools.partial(warn, "--session_service_uri"),
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--artifact_storage_uri",
         type=str,
         help="Deprecated. Use --artifact_service_uri instead.",
@@ -1127,32 +1145,32 @@ def deprecated_adk_services_options():
         default=None,
     )
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
       return func(*args, **kwargs)
 
-    return wrapper
+    return cast(F, wrapper)
 
   return decorator
 
 
-def fast_api_common_options():
+def fast_api_common_options() -> Callable[[F], F]:
   """Decorator to add common fast api options to click commands."""
 
-  def decorator(func):
-    @click.option(
+  def decorator(func: F) -> F:
+    @click.option(  # type: ignore[untyped-decorator]
         "--host",
         type=str,
         help="Optional. The binding host of the server",
         default="127.0.0.1",
         show_default=True,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--port",
         type=int,
         help="Optional. The port of the server",
         default=8000,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--allow_origins",
         help=(
             "Optional. Origins to allow for CORS. Can be literal origins"
@@ -1161,7 +1179,7 @@ def fast_api_common_options():
         ),
         multiple=True,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "-v",
         "--verbose",
         is_flag=True,
@@ -1169,20 +1187,20 @@ def fast_api_common_options():
         default=False,
         help="Enable verbose (DEBUG) logging. Shortcut for --log_level DEBUG.",
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--log_level",
         type=LOG_LEVELS,
         default="INFO",
         help="Optional. Set the logging level",
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--trace_to_cloud",
         is_flag=True,
         show_default=True,
         default=False,
         help="Optional. Whether to enable cloud trace for telemetry.",
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--otel_to_cloud",
         is_flag=True,
         show_default=True,
@@ -1192,7 +1210,7 @@ def fast_api_common_options():
             " Observability services - Cloud Trace and Cloud Logging."
         ),
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--reload/--no-reload",
         default=True,
         help=(
@@ -1200,21 +1218,21 @@ def fast_api_common_options():
             " for Cloud Run."
         ),
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--a2a",
         is_flag=True,
         show_default=True,
         default=False,
         help="Optional. Whether to enable A2A endpoint.",
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--reload_agents",
         is_flag=True,
         default=False,
         show_default=True,
         help="Optional. Whether to enable live reload for agents changes.",
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--eval_storage_uri",
         type=str,
         help=(
@@ -1223,7 +1241,7 @@ def fast_api_common_options():
         ),
         default=None,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--extra_plugins",
         help=(
             "Optional. Comma-separated list of extra plugin classes or"
@@ -1232,7 +1250,7 @@ def fast_api_common_options():
         ),
         multiple=True,
     )
-    @click.option(
+    @click.option(  # type: ignore[untyped-decorator]
         "--url_prefix",
         type=str,
         help=(
@@ -1244,8 +1262,8 @@ def fast_api_common_options():
         default=None,
     )
     @functools.wraps(func)
-    @click.pass_context
-    def wrapper(ctx, *args, **kwargs):
+    @click.pass_context  # type: ignore[untyped-decorator]
+    def wrapper(ctx: click.Context, *args: Any, **kwargs: Any) -> Any:
       # If verbose flag is set and log level is not set, set log level to DEBUG.
       log_level_source = ctx.get_parameter_source("log_level")
       if (
@@ -1256,18 +1274,18 @@ def fast_api_common_options():
 
       return func(*args, **kwargs)
 
-    return wrapper
+    return cast(F, wrapper)
 
   return decorator
 
 
-@main.command("web")
+@main.command("web")  # type: ignore[untyped-decorator]
 @feature_options()
 @fast_api_common_options()
 @web_options()
 @adk_services_options(default_use_local_storage=True)
 @deprecated_adk_services_options()
-@click.argument(
+@click.argument(  # type: ignore[untyped-decorator]
     "agents_dir",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
@@ -1296,7 +1314,7 @@ def cli_web(
     extra_plugins: Optional[list[str]] = None,
     logo_text: Optional[str] = None,
     logo_image_url: Optional[str] = None,
-):
+) -> None:
   """Starts a FastAPI server with Web UI for agents.
 
   AGENTS_DIR: The directory of agents, where each subdirectory is a single
@@ -1311,7 +1329,7 @@ def cli_web(
   logs.setup_adk_logger(getattr(logging, log_level.upper()))
 
   @asynccontextmanager
-  async def _lifespan(app: FastAPI):
+  async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     click.secho(
         f"""
 +-----------------------------------------------------------------------------+
@@ -1364,11 +1382,11 @@ def cli_web(
   server.run()
 
 
-@main.command("api_server")
+@main.command("api_server")  # type: ignore[untyped-decorator]
 @feature_options()
 # The directory of agents, where each subdirectory is a single agent.
 # By default, it is the current working directory
-@click.argument(
+@click.argument(  # type: ignore[untyped-decorator]
     "agents_dir",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
@@ -1398,7 +1416,7 @@ def cli_api_server(
     a2a: bool = False,
     reload_agents: bool = False,
     extra_plugins: Optional[list[str]] = None,
-):
+) -> None:
   """Starts a FastAPI server for agents.
 
   AGENTS_DIR: The directory of agents, where each subdirectory is a single
@@ -1445,8 +1463,8 @@ def cli_api_server(
         "allow_extra_args": True,
         "allow_interspersed_args": False,
     },
-)
-@click.option(
+)  # type: ignore[untyped-decorator]
+@click.option(  # type: ignore[untyped-decorator]
     "--project",
     type=str,
     help=(
@@ -1454,7 +1472,7 @@ def cli_api_server(
         " default project from gcloud config is used."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--region",
     type=str,
     help=(
@@ -1462,7 +1480,7 @@ def cli_api_server(
         " gcloud run deploy will prompt later."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--service_name",
     type=str,
     default="adk-default-service-name",
@@ -1471,7 +1489,7 @@ def cli_api_server(
         " 'adk-default-service-name')."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--app_name",
     type=str,
     default="",
@@ -1480,27 +1498,27 @@ def cli_api_server(
         " of the AGENT source code)."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--port",
     type=int,
     default=8000,
     help="Optional. The port of the ADK API server (default: 8000).",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--trace_to_cloud",
     is_flag=True,
     show_default=True,
     default=False,
     help="Optional. Whether to enable Cloud Trace for cloud run.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--otel_to_cloud",
     is_flag=True,
     show_default=True,
     default=False,
     help="Optional. Whether to enable OpenTelemetry for Agent Engine.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--with_ui",
     is_flag=True,
     show_default=True,
@@ -1510,7 +1528,7 @@ def cli_api_server(
         " only)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--temp_folder",
     type=str,
     default=os.path.join(
@@ -1523,24 +1541,24 @@ def cli_api_server(
         " (default: a timestamped folder in the system temp directory)."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--log_level",
     type=LOG_LEVELS,
     default="INFO",
     help="Optional. Set the logging level",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--verbosity",
     type=LOG_LEVELS,
     help="Deprecated. Use --log_level instead.",
 )
-@click.argument(
+@click.argument(  # type: ignore[untyped-decorator]
     "agent",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--adk_version",
     type=str,
     default=version.__version__,
@@ -1550,14 +1568,14 @@ def cli_api_server(
         " version in the dev environment)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--a2a",
     is_flag=True,
     show_default=True,
     default=False,
     help="Optional. Whether to enable A2A endpoint.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--allow_origins",
     help=(
         "Optional. Origins to allow for CORS. Can be literal origins"
@@ -1569,9 +1587,9 @@ def cli_api_server(
 # TODO: Add eval_storage_uri option back when evals are supported in Cloud Run.
 @adk_services_options(default_use_local_storage=False)
 @deprecated_adk_services_options()
-@click.pass_context
+@click.pass_context  # type: ignore[untyped-decorator]
 def cli_deploy_cloud_run(
-    ctx,
+    ctx: click.Context,
     agent: str,
     project: Optional[str],
     region: Optional[str],
@@ -1593,7 +1611,7 @@ def cli_deploy_cloud_run(
     session_db_url: Optional[str] = None,  # Deprecated
     artifact_storage_uri: Optional[str] = None,  # Deprecated
     a2a: bool = False,
-):
+) -> None:
   """Deploys an agent to Cloud Run.
 
   AGENT: The path to the agent source code folder.
@@ -1676,14 +1694,14 @@ def cli_deploy_cloud_run(
     click.secho(f"Deploy failed: {e}", fg="red", err=True)
 
 
-@main.group()
-def migrate():
+@main.group()  # type: ignore[untyped-decorator]
+def migrate() -> None:
   """ADK migration commands."""
   pass
 
 
-@migrate.command("session", cls=HelpfulCommand)
-@click.option(
+@migrate.command("session", cls=HelpfulCommand)  # type: ignore[untyped-decorator]
+@click.option(  # type: ignore[untyped-decorator]
     "--source_db_url",
     required=True,
     help=(
@@ -1691,7 +1709,7 @@ def migrate():
         " sqlite:///source.db."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--dest_db_url",
     required=True,
     help=(
@@ -1699,7 +1717,7 @@ def migrate():
         " e.g. sqlite:///dest.db."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--log_level",
     type=LOG_LEVELS,
     default="INFO",
@@ -1707,7 +1725,7 @@ def migrate():
 )
 def cli_migrate_session(
     *, source_db_url: str, dest_db_url: str, log_level: str
-):
+) -> None:
   """Migrates a session database to the latest schema version."""
   logs.setup_adk_logger(getattr(logging, log_level.upper()))
   try:
@@ -1719,8 +1737,8 @@ def cli_migrate_session(
     click.secho(f"Migration failed: {e}", fg="red", err=True)
 
 
-@deploy.command("agent_engine")
-@click.option(
+@deploy.command("agent_engine")  # type: ignore[untyped-decorator]
+@click.option(  # type: ignore[untyped-decorator]
     "--api_key",
     type=str,
     default=None,
@@ -1732,7 +1750,7 @@ def cli_migrate_session(
         " exists.)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--project",
     type=str,
     default=None,
@@ -1742,7 +1760,7 @@ def cli_migrate_session(
         " ignored if api_key is set."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--region",
     type=str,
     default=None,
@@ -1752,14 +1770,14 @@ def cli_migrate_session(
         " ignored if api_key is set."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--staging_bucket",
     type=str,
     default=None,
     help="Deprecated. This argument is no longer required or used.",
     callback=_deprecate_staging_bucket,
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--agent_engine_id",
     type=str,
     default=None,
@@ -1773,7 +1791,7 @@ def cli_migrate_session(
         " resource name (i.e. `projects/*/locations/*/reasoningEngines/*`)."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--trace_to_cloud/--no-trace_to_cloud",
     type=bool,
     is_flag=True,
@@ -1781,7 +1799,7 @@ def cli_migrate_session(
     default=None,
     help="Optional. Whether to enable Cloud Trace for Agent Engine.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--otel_to_cloud",
     type=bool,
     is_flag=True,
@@ -1789,21 +1807,21 @@ def cli_migrate_session(
     default=None,
     help="Optional. Whether to enable OpenTelemetry for Agent Engine.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--display_name",
     type=str,
     show_default=True,
     default="",
     help="Optional. Display name of the agent in Agent Engine.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--description",
     type=str,
     show_default=True,
     default="",
     help="Optional. Description of the agent in Agent Engine.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--adk_app",
     type=str,
     default="agent_engine_app",
@@ -1812,7 +1830,7 @@ def cli_migrate_session(
         " (default: a file named agent_engine_app.py)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--temp_folder",
     type=str,
     default=None,
@@ -1822,7 +1840,7 @@ def cli_migrate_session(
         " (default: a timestamped folder in the current working directory)."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--adk_app_object",
     type=str,
     default=None,
@@ -1831,7 +1849,7 @@ def cli_migrate_session(
         " It can only be `root_agent` or `app`. (default: `root_agent`)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--env_file",
     type=str,
     default="",
@@ -1840,7 +1858,7 @@ def cli_migrate_session(
         " (default: the `.env` file in the `agent` directory, if any.)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--requirements_file",
     type=str,
     default="",
@@ -1850,13 +1868,13 @@ def cli_migrate_session(
         " any.)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--absolutize_imports",
     type=bool,
     default=False,
     help=" NOTE: This flag is deprecated and will be removed in the future.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--agent_engine_config_file",
     type=str,
     default="",
@@ -1867,7 +1885,7 @@ def cli_migrate_session(
         " directory, if any.)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--validate-agent-import/--no-validate-agent-import",
     default=False,
     help=(
@@ -1876,7 +1894,7 @@ def cli_migrate_session(
         " dependencies as the deployment environment. (default: disabled)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--skip-agent-import-validation",
     "skip_agent_import_validation_alias",
     is_flag=True,
@@ -1886,7 +1904,7 @@ def cli_migrate_session(
         " the default; use --validate-agent-import to enable validation."
     ),
 )
-@click.argument(
+@click.argument(  # type: ignore[untyped-decorator]
     "agent",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
@@ -1912,7 +1930,7 @@ def cli_deploy_agent_engine(
     agent_engine_config_file: str,
     validate_agent_import: bool = False,
     skip_agent_import_validation_alias: bool = False,
-):
+) -> None:
   """Deploys an agent to Agent Engine.
 
   Example:
@@ -1954,8 +1972,8 @@ def cli_deploy_agent_engine(
     click.secho(f"Deploy failed: {e}", fg="red", err=True)
 
 
-@deploy.command("gke")
-@click.option(
+@deploy.command("gke")  # type: ignore[untyped-decorator]
+@click.option(  # type: ignore[untyped-decorator]
     "--project",
     type=str,
     help=(
@@ -1963,7 +1981,7 @@ def cli_deploy_agent_engine(
         " default project from gcloud config is used."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--region",
     type=str,
     help=(
@@ -1971,12 +1989,12 @@ def cli_deploy_agent_engine(
         " gcloud run deploy will prompt later."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--cluster_name",
     type=str,
     help="Required. The name of the GKE cluster.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--service_name",
     type=str,
     default="adk-default-service-name",
@@ -1985,7 +2003,7 @@ def cli_deploy_agent_engine(
         " 'adk-default-service-name')."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--app_name",
     type=str,
     default="",
@@ -1994,27 +2012,27 @@ def cli_deploy_agent_engine(
         " of the AGENT source code)."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--port",
     type=int,
     default=8000,
     help="Optional. The port of the ADK API server (default: 8000).",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--trace_to_cloud",
     is_flag=True,
     show_default=True,
     default=False,
     help="Optional. Whether to enable Cloud Trace for GKE.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--otel_to_cloud",
     is_flag=True,
     show_default=True,
     default=False,
     help="Optional. Whether to enable OpenTelemetry for GKE.",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--with_ui",
     is_flag=True,
     show_default=True,
@@ -2024,13 +2042,13 @@ def cli_deploy_agent_engine(
         " only)"
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--log_level",
     type=LOG_LEVELS,
     default="INFO",
     help="Optional. Set the logging level",
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--temp_folder",
     type=str,
     default=os.path.join(
@@ -2043,7 +2061,7 @@ def cli_deploy_agent_engine(
         " (default: a timestamped folder in the system temp directory)."
     ),
 )
-@click.option(
+@click.option(  # type: ignore[untyped-decorator]
     "--adk_version",
     type=str,
     default=version.__version__,
@@ -2054,7 +2072,7 @@ def cli_deploy_agent_engine(
     ),
 )
 @adk_services_options(default_use_local_storage=False)
-@click.argument(
+@click.argument(  # type: ignore[untyped-decorator]
     "agent",
     type=click.Path(
         exists=True, dir_okay=True, file_okay=False, resolve_path=True
@@ -2073,12 +2091,12 @@ def cli_deploy_gke(
     otel_to_cloud: bool,
     with_ui: bool,
     adk_version: str,
-    log_level: Optional[str] = None,
+    log_level: str,
     session_service_uri: Optional[str] = None,
     artifact_service_uri: Optional[str] = None,
     memory_service_uri: Optional[str] = None,
     use_local_storage: bool = False,
-):
+) -> None:
   """Deploys an agent to GKE.
 
   AGENT: The path to the agent source code folder.

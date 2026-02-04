@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import click
 from google.genai import types
@@ -52,7 +53,7 @@ async def _create_conformance_test_files(
     )
 
     # Run the agent with the user messages
-    function_call_name_to_id_map = {}
+    function_call_name_to_id_map: dict[str, str] = {}
     for user_message_index, user_message in enumerate(
         test_case.test_spec.user_messages
     ):
@@ -130,7 +131,7 @@ async def _create_conformance_test_files(
         },
     )
 
-    return generated_session_file
+    return cast(Path, generated_session_file)
 
 
 async def run_conformance_record(paths: list[Path]) -> None:
